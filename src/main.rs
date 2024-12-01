@@ -11,6 +11,7 @@ use axum::{
     extract::{DefaultBodyLimit, Multipart},
     response::{Html, IntoResponse},
     routing::get, 
+    extract::Path as axumPath,
     Json, 
     Router
 };
@@ -21,14 +22,20 @@ use serde::{Serialize ,Deserialize};
 use scraper::Selector;
 use tower_http::services::ServeDir;
 
+
+mod folder;
+use folder::folder::Folder;
+
 #[tokio::main]
 async fn main() {
     let serve_dir = ServeDir::new("all_pdfs");
 
     let app = Router::new()
-        .route("/", get(root))
-        .route("/folder", get(folder).post(reg_folder))
+        .route("/", get(root).post(reg_folder))
         .route("/folder_list", get(folder_list))
+
+        .route("/:id", get(displey))
+        
         .route("/add", get(add_pdf).post(add_pdf_file))
         .route("/pdf_list", get(pdf_list))
         .nest_service("/resource", serve_dir)
@@ -45,13 +52,6 @@ async fn root() -> impl IntoResponse {
         Ok(content) => Html(content),
         Err(_) => Html("<h1>404: File Not Found</h1>".to_string()),
     }
-}
-
-#[derive(Serialize,Deserialize,Debug)]
-struct Folder {
-    folder_name: String,
-    uuid: String,
-    list: Vec<String>,
 }
 
 async fn reg_folder(body: String) -> String {
@@ -114,14 +114,6 @@ async fn reg_folder(body: String) -> String {
     "OK".to_string()
 }
 
-async fn folder() -> impl IntoResponse {
-    let file_path = "static/addfolder.html";
-    match std::fs::read_to_string(file_path) {
-        Ok(content) => Html(content),
-        Err(_) => Html("<h1>404: File Not Found</h1>".to_string()),
-    }
-}
-
 async fn folder_list() -> Json<Vec<Folder>> {
     let mut arr:Vec<Folder> = vec![];
     let file_name = "folder.json";
@@ -149,6 +141,16 @@ async fn folder_list() -> Json<Vec<Folder>> {
     }
 
     Json(arr)
+}
+
+async fn displey(axumPath(id): axumPath<String>) -> impl IntoResponse {
+    // make_json();
+    println!("{}", id);
+    let file_path = "static/list.html";
+    match fs::read_to_string(file_path) {
+        Ok(content) => Html(content),
+        Err(_) => Html("<h1>404: File Not Found</h1>".to_string()),
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

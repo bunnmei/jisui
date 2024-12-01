@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+    .main {
+      margin: 0 auto;
+      width: 600px;
+      height: 100vh;
+      /* background-color: pink; */
+    }
+    .a-tag {
+      text-decoration: none;
+      color: #1f1f1f;
+    }
+
+    .panel-box {
+      width: 100%;
+      height: 150px;
+      /* background-color: aqua; */
+      display: flex;
+      cursor: pointer;
+    }
+    
+    .panel-box:hover .panel-img > img {
+
+    }
+
+    .panel-img {
+      width: 150px;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .panel-img > img {   
+      object-fit: contain;
+      width: 100%;
+      height: 100%;
+    }
+    
+    .panel-desc {
+      flex: 1;
+      height: 100%;
+    }
+
+    .panel-desc-title {
+      text-decoration: none;
+      margin: 16px;
+      font-size: 24px;
+      overflow: hidden;
+    }
+
+  </style>
+  <title>本棚</title>
+</head>
+<body>
+  <div class="main">
+  </div>
+  <script>
+    const main = document.querySelector(".main");
+    get_json();
+
+    async function get_json() {
+      const url = "/pdf_list"
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Response status: ${response.status}`);
+        }
+        const json = await res.json();
+        json.list.forEach(book => {
+          create_panel(book)
+        });
+      } catch (error) {
+        console.log("error")
+        console.error(error.message);
+      }
+    }
+
+    function create_panel(book) {
+      const a_tag = document.createElement("a")
+      a_tag.href = `http://localhost:3000/resource/${book.id}/${book.id}.pdf`
+      a_tag.className = "a-tag"
+
+      const box = document.createElement("div")
+      box.className = "panel-box"
+
+      const img_box = document.createElement("div")
+      img_box.className = "panel-img"
+
+      const img = document.createElement("img")
+      img.src = `http://localhost:3000/resource/${book.id}/${book.img}`
+
+      img_box.appendChild(img)
+
+      const desc = document.createElement("div")
+      desc.className = "panel-desc"
+      const p_title = document.createElement("p")
+      p_title.className = "panel-desc-title"
+      p_title.textContent = book.title
+
+      desc.appendChild(p_title)
+
+      box.appendChild(img_box)
+      box.appendChild(desc)
+      a_tag.append(box)
+      main.appendChild(a_tag)
+      // <div class="panel-box">
+      //       <div class="panel-img">
+      //         <img src="http://localhost:3000/resource/0123458/raspberry_pi_pico.jpg" alt="">
+      //       </div>
+      //       <div class="panel-desc">
+      //         <p class="panel-desc-title">titleほげ</p>
+      //       </div>
+      //     </div>
+    }
+  </script>
+</body>
+</html>
