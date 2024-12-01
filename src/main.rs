@@ -1,19 +1,25 @@
-use axum::{
-    body, extract::{DefaultBodyLimit, Form, Multipart}, http::StatusCode, response::{Html, IntoResponse}, routing::{get, get_service, post}, Json, Router
+use std::{fs, fs::OpenOptions, str};
+use std::path::Path;
+use std::io::{Read, Write};
+
+use tokio::{
+    fs::File,
+    io::AsyncWriteExt
 };
 
+use axum::{
+    extract::{DefaultBodyLimit, Multipart},
+    response::{Html, IntoResponse},
+    routing::get, 
+    Json, 
+    Router
+};
+
+use uuid::Uuid;
+
+use serde::{Serialize ,Deserialize};
 use scraper::Selector;
 use tower_http::services::ServeDir;
-
-use serde::Serialize;
-use serde::Deserialize;
-
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
-
-use std::{f32::consts::E, fs, io::{self, Error, Write}};
-use std::path::Path;
-use std::io::Read;
 
 #[tokio::main]
 async fn main() {
@@ -21,6 +27,8 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(root))
+        .route("/folder", get(folder).post(reg_folder))
+        .route("/folder_list", get(folder_list))
         .route("/add", get(add_pdf).post(add_pdf_file))
         .route("/pdf_list", get(pdf_list))
         .nest_service("/resource", serve_dir)
@@ -39,6 +47,110 @@ async fn root() -> impl IntoResponse {
     }
 }
 
+#[derive(Serialize,Deserialize,Debug)]
+struct Folder {
+    folder_name: String,
+    uuid: String,
+    list: Vec<String>,
+}
+
+async fn reg_folder(body: String) -> String {
+    // ファイルに書き込むデータを作成
+    let write_data = Folder {
+            folder_name: body.to_string(),
+            uuid:  Uuid::new_v4().to_string(),
+            list: vec![],
+    };
+
+    let file_name = "folder.json";
+    let path = Path::new(file_name);
+    if !path.is_file() { //　ファイルがなかった場合
+        let create_file = std::fs::File::create("./folder.json");
+        match create_file {
+            Ok(mut file) => { //ファイルを作成し、jsonに変換後書き込み
+                let json_data = serde_json::to_string_pretty(&vec![write_data]);
+                if let Ok(data) = json_data {
+                    if let Err(error) = file.write_all(data.as_bytes()) {
+                        println!("書き込みに失敗 {}", error);
+                    }
+                } else {
+                    println!("書き込みデータのjsonに変換失敗");
+                }
+            },
+            Err(error) => {
+                println!("./folder.jsonのファイル作成に失敗。-{}", error)
+            }
+        }
+    } else { //ファイルがあった場合
+        // let open_file = std::fs::File::open(path); //普通のFile::openはreadonlyになる
+        let open_file = OpenOptions::new().read(true).open(path);
+        match open_file {
+            Ok(mut file) => {
+                let mut contents = String::new(); //ファイルから読み取ったデータの保管場所
+                if file.read_to_string(&mut contents).is_ok() {
+                    let json_arr= serde_json::from_str::<Vec<Folder>>(&contents);
+                    if let Ok(mut arr) = json_arr {
+                        arr.push(write_data); //新しいデータの追加
+                        if let Ok(string) = serde_json::to_string_pretty(&arr){
+                            let mut update_file = fs::File::create(path).expect("update_fileの失敗");
+                            if let Err(error) = update_file.write_all(string.as_bytes()) {
+                                println!("書き込みに失敗 {}", error);
+                            }
+                        } else {
+                            println!("シリアライズに失敗")
+                        }
+                    } else {
+                        println!("デシリアライズに失敗")
+                    }
+                } else {
+                    println!("ファイルの読み取りに失敗");
+                }
+            },
+            Err(error) => {
+                println!("./folder.jsonのファイルを開けませんでした。{}", error);
+            }
+        }
+    }   
+    "OK".to_string()
+}
+
+async fn folder() -> impl IntoResponse {
+    let file_path = "static/addfolder.html";
+    match std::fs::read_to_string(file_path) {
+        Ok(content) => Html(content),
+        Err(_) => Html("<h1>404: File Not Found</h1>".to_string()),
+    }
+}
+
+async fn folder_list() -> Json<Vec<Folder>> {
+    let mut arr:Vec<Folder> = vec![];
+    let file_name = "folder.json";
+    let path = Path::new(file_name);
+    if !path.is_file() {
+        return Json(arr);
+    }
+
+    match std::fs::File::open(path) {
+        Ok(mut file) => {
+            let mut contents = String::new();
+            if let Err(e) = file.read_to_string(&mut contents) {
+                eprintln!("Failed to read meta.json: {}", e);
+            } else {
+                match serde_json::from_str::<Vec<Folder>>(&contents) {
+                    Ok(folders) => {
+                        // println!("Parsed BookData: {:?}", book_data);
+                        arr = folders;
+                    }
+                    Err(e) => eprintln!("Failed to parse meta.json: {}", e),
+                }
+            }
+        }
+        Err(e) => eprintln!("Failed to open meta.json: {}", e),
+    }
+
+    Json(arr)
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct BookData {
     id: String,
@@ -52,16 +164,16 @@ struct BookDataList {
 }
 
 async fn pdf_list() -> Json<BookDataList> {
-    let data = amazon_scraper().await;
-    match data {
-        Ok((src, alt)) => {
-            println!("{}----{}", src, alt);
-            img_file_download(&src).await;
-        },
-        Err(err) => {
-            println!("error {}", err);
-        }
-    }
+    // let data = amazon_scraper().await;
+    // match data {
+    //     Ok((src, alt)) => {
+    //         println!("{}----{}", src, alt);
+    //         img_file_download(&src).await;
+    //     },
+    //     Err(err) => {
+    //         println!("error {}", err);
+    //     }
+    // }
     Json(make_json())
 }
 
@@ -191,3 +303,15 @@ fn make_json() -> BookDataList {
     
     BookDataList {list}
 }
+
+// fn read_json_file<T>(file_path: &str) -> Result<Vec<T>, Box<dyn std::error::Error>> {
+//     let mut contents = String::new();
+//     fs::read_to_string(file_path)?.read_to_string(&mut contents)?;
+//     serde_json::from_str(&contents)
+// }
+
+// fn write_json_file<T>(file_path: &str, data: &[T]) -> Result<(), Box<dyn std::error::Error>> {
+//     let serialized = serde_json::to_string_pretty(data)?;
+//     fs::write(file_path, serialized.as_bytes())?;
+//     Ok(())
+// }

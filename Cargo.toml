@@ -10,5 +10,6 @@ serde = {version = "1.0.215", features = ["derive"]}
 tower-http = { version = "0.6.2", features = ["fs"]}
 serde_json = "1.0"
 
+uuid = { version = "1.11.0" , features = ["v4", "fast-rng", "macro-diagnostics"] }
 reqwest = { version = "0.12", features = ["blocking"] }
 scraper = "0.21"
