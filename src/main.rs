@@ -146,6 +146,29 @@ async fn folder_list() -> Json<Vec<Folder>> {
 async fn displey(axumPath(id): axumPath<String>) -> impl IntoResponse {
     // make_json();
     println!("{}", id);
+    let open_file = OpenOptions::new().read(true).open("./folder.json");
+    match open_file {
+            Ok(mut file) => {
+                let mut contents = String::new(); //ファイルから読み取ったデータの保管場所
+                if file.read_to_string(&mut contents).is_ok() {
+                    let json_arr= serde_json::from_str::<Vec<Folder>>(&contents);
+                    if let Ok(data) = json_arr {
+                        let find_folder = data.iter().find(|folder| folder.folder_name == id);
+
+                        if let Some(find) = find_folder {
+                            println!("{}", find.uuid);
+                            
+                        } else { // :idに無効なパスが入っていると404を返す。
+                            return Html("<h1>404: File Not Found</h1>".to_string());
+                        }
+                    }
+                }
+            },
+            Err(error) => {
+                println!("file open error {}", error)
+            }
+        }                        
+    
     let file_path = "static/list.html";
     match fs::read_to_string(file_path) {
         Ok(content) => Html(content),
