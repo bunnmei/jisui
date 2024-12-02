@@ -5,16 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
-      width: 100%;
-      height: 100%;
       margin: 0;
     }
+    .main-container{ 
+      width:600px;
+      margin:0 auto; 
+      background-color: aqua;
+    }
+    .main-footer{
+      width: 100%;
+      height: 50px;
+      position:-webkit-sticky;
+      position:sticky;
+      bottom: 16px;
+      border-color:red;
+      background-color: pink;
+      display: flex;
+      align-items: end;
+      transition: height 0.3s ease; 
+      overflow: hidden;
+    }
+
     .main {
       margin: 0 auto;
       width: 600px;
-      height: 100vh;
-      /* background-color: pink; */
+      min-height: calc(100vh - 50px - 1px);
+      transition: min-height 0.3s ease;
     }
+
     .a-tag {
       text-decoration: none;
       color: #1f1f1f;
@@ -58,14 +76,119 @@
       overflow: hidden;
     }
 
+    .item {
+      background-color: purple;
+      font-size: 24px;
+      height: 70px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+    }
+
+    .add {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background-color: yellow;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0px 16px 0 auto;
+    }
+    .min {
+      min-height: calc(100vh - 300px - 1px);
+    }
+    .main-footer.open {
+      height: 300px;
+    }
+    .form {
+      width: 100%;
+      height: 300px;
+      background-color: powderblue;
+    }
+
+    .form-input {
+      display: flex;
+    }
+
+    .form-status {
+      margin: 16px 0 0 16px;
+    }
+
+    .input {
+      height: 32px;
+      margin: 16px 0 0 16px;
+    }
+
+    .btn {
+      height: 40px;
+      width: 80px;
+      background-color: pink;
+      margin: 16px 0 0 16px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .up-box {
+      width: 200px;
+      height: 200px;
+      background-color: yellow;
+      margin: 16px 0 0 16px;
+    }
   </style>
   <title>本棚</title>
 </head>
 <body>
-  <div class="main">
-  </div>
+  <main class="main-container">
+    
+    <div class="main">
+      
+    </div>
+    <div class="main-footer">
+        <div class="form">
+          <div class="form-input">
+            <div class="up-box" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);">
+            </div>
+            <input type="text" placeholder="amazon url" class="input">
+            <div class="btn">登録</div>
+          </div>
+          <div class="form-status"></div>
+        </div>
+        <div class="add">+</div>
+    </div>
+    <!-- pdf - url -->
+    <!-- pdf - img - title -->
+  </main>
   <script>
-    const main = document.querySelector(".main");
+    const main = document.querySelector(".main")
+    const add = document.querySelector(".add")
+    const foot = document.querySelector(".main-footer")
+    const input = document.querySelector(".input")
+    const btn = document.querySelector(".btn")
+    let pdf_file = null
+
+    const url = window.location.pathname;
+    const path = url.split('/').filter(Boolean)
+    const path_id = path[path.length - 1] //URLの末尾を取り出す
+  
+    add.addEventListener("click", () => {
+      foot.classList.toggle("open")
+      main.classList.toggle("min")
+    })
+
+    btn.addEventListener("click", async () => {
+      let status = await check_input_val()
+      if(status !== status_list.pass){
+        console.log(status.msg)
+        set_massage(status)
+        return
+      }
+      console.log(status.msg)
+
+      await submit()
+    })
+
     get_json();
 
     async function get_json() {
@@ -83,6 +206,61 @@
         console.log("error")
         console.error(error.message);
       }
+    }
+
+    const status_list = {
+      ok: {
+        msg: "登録完了",
+        color: "#59E787"
+      },
+      err_exist: {
+        msg: "同じ名前のものがすでにあります",
+        color: "#FF5835"
+      },
+      err_send: {
+        msg: "送信に失敗しました",
+        color: "#FF5835"
+      },
+      err_validation: {
+        msg: "入力漏れがあります。",
+        color: "#FF5835"
+      },
+      none: {
+        msg: "",
+        color: "#1f1f1f"
+      },
+      pass: { 
+        msg : "ok",
+        color : "#1f1f1f"
+      }
+    }
+
+    async function check_input_val () {
+      const value = input.value
+      if (value === "") { // inputの値が空ではないか確認
+        return status_list.err_validation
+      }
+      if (pdf_file === null) {
+        return status_list.err_validation
+      }
+      return status_list.pass
+    }
+
+    function submit() {
+      const formData = new FormData();
+      formData.append('textData', input.value)
+      formData.append('pdfFile', pdf_file);
+      
+      fetch(`/${path_id}`, {
+        method: 'POST',
+        body: formData,
+      })
+      .then((res) => {
+        if(res.ok) {
+          console.log("送信完了")
+        }
+        console.log(res)
+      })
     }
 
     function create_panel(book) {
@@ -121,6 +299,37 @@
       //         <p class="panel-desc-title">titleほげ</p>
       //       </div>
       //     </div>
+    }
+
+    function dropHandler(ev) {
+      console.log("File(s) dropped");
+
+      // Prevent default behavior (Prevent file from being opened)
+      ev.preventDefault();
+
+      if (ev.dataTransfer.items) {
+        // Use DataTransferItemList interface to access the file(s)
+        [...ev.dataTransfer.items].forEach((item, i) => {
+          // If dropped items aren't files, reject them
+          if (item.kind === "file") {
+            const file = item.getAsFile();
+            pdf_file = file
+            console.log(`… file[${i}].name = ${file.name}`);
+          }
+        });
+      } else {
+        // Use DataTransfer interface to access the file(s)
+        [...ev.dataTransfer.files].forEach((file, i) => {
+          console.log(`… file[${i}].name = ${file.name}`);
+        });
+      }
+    }
+
+    function dragOverHandler(ev) {
+      console.log("File(s) in drop zone");
+
+      // Prevent default behavior (Prevent file from being opened)
+      ev.preventDefault();
     }
   </script>
 </body>

@@ -22,9 +22,11 @@ use serde::{Serialize ,Deserialize};
 use scraper::Selector;
 use tower_http::services::ServeDir;
 
-
 mod folder;
-use folder::folder::Folder;
+use folder::folder::{json_file_search_uuid, read_json_file, Folder};
+
+mod pdf;
+// use pdf::pdf::search_pdfs;
 
 #[tokio::main]
 async fn main() {
@@ -34,7 +36,7 @@ async fn main() {
         .route("/", get(root).post(reg_folder))
         .route("/folder_list", get(folder_list))
 
-        .route("/:id", get(displey))
+        .route("/:id", get(displey).post(reg_pdf))
         
         .route("/add", get(add_pdf).post(add_pdf_file))
         .route("/pdf_list", get(pdf_list))
@@ -144,37 +146,53 @@ async fn folder_list() -> Json<Vec<Folder>> {
 }
 
 async fn displey(axumPath(id): axumPath<String>) -> impl IntoResponse {
-    // make_json();
-    println!("{}", id);
-    let open_file = OpenOptions::new().read(true).open("./folder.json");
-    match open_file {
-            Ok(mut file) => {
-                let mut contents = String::new(); //ファイルから読み取ったデータの保管場所
-                if file.read_to_string(&mut contents).is_ok() {
-                    let json_arr= serde_json::from_str::<Vec<Folder>>(&contents);
-                    if let Ok(data) = json_arr {
-                        let find_folder = data.iter().find(|folder| folder.folder_name == id);
-
-                        if let Some(find) = find_folder {
-                            println!("{}", find.uuid);
-                            
-                        } else { // :idに無効なパスが入っていると404を返す。
-                            return Html("<h1>404: File Not Found</h1>".to_string());
-                        }
-                    }
-                }
-            },
-            Err(error) => {
-                println!("file open error {}", error)
-            }
-        }                        
-    
+    // println!("{}", id); urlのpath
+    let json = read_json_file::<Folder>("folder.json");
+    let find_uuid = json_file_search_uuid(json, &id);
     let file_path = "static/list.html";
-    match fs::read_to_string(file_path) {
-        Ok(content) => Html(content),
-        Err(_) => Html("<h1>404: File Not Found</h1>".to_string()),
+    match find_uuid {
+        Some(uuid) => {
+            println!("{}", uuid);
+            match fs::read_to_string(file_path) {
+                Ok(content) => Html(content),
+                Err(_) => Html("<h1>404: File Not Found</h1>".to_string()),
+            }
+        },
+        None => {
+            Html("<h1>404: File Not Found</h1>".to_string())
+        }
     }
 }
+
+async fn reg_pdf(axumPath(id): axumPath<String>, mut multipart: Multipart) -> String {
+    let json = read_json_file::<Folder>("folder.json");
+    let find_uuid = json_file_search_uuid(json, &id);
+
+    let mut text_data = String::new();
+    while let Some(mut field) = multipart.next_field().await.unwrap() {
+        if field.name() == Some("textData") {
+            text_data = field.text().await.unwrap();
+            println!("{}", text_data);
+        } else if field.name() == Some("pdfFile") {
+            // PDFファイルを保存する処理
+            let file_name = field.file_name().unwrap_or("temp.pdf");
+            println!("{}", file_name);
+            // let mut file = File::create(format!("./{}", file_name)).await.unwrap();
+            
+            // let mut data = Vec::new(); // バイトデータを格納するベクトル
+
+            // while let Some(chunk) = field.chunk().await.unwrap() {
+            //     file.write_all(&chunk).await.unwrap();
+            //     data.extend_from_slice(&chunk);
+            // }
+            // println!("ファイルサイズ: {}", data.len());
+            // println!("保存処理完了")
+        }
+    }
+
+    "ok".to_string()
+}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 struct BookData {
