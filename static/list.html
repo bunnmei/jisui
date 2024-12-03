@@ -167,12 +167,15 @@
     const input = document.querySelector(".input")
     const btn = document.querySelector(".btn")
     let pdf_file = null
-
+    let ps;
+    
     const url = window.location.pathname;
     const path = url.split('/').filter(Boolean)
     const path_id = path[path.length - 1] //URLの末尾を取り出す
-  
-    add.addEventListener("click", () => {
+    
+    get_json();
+
+    add.addEventListener("click", async () => {
       foot.classList.toggle("open")
       main.classList.toggle("min")
     })
@@ -187,21 +190,25 @@
       console.log(status.msg)
 
       await submit()
-    })
-
-    get_json();
+    });
 
     async function get_json() {
-      const url = "/pdf_list"
+      const url = `/pdf_list/${path_id}`
       try {
-        const res = await fetch(url);
+        const res = await fetch(url)
         if (!res.ok) {
           throw new Error(`Response status: ${response.status}`);
         }
         const json = await res.json();
-        json.list.forEach(book => {
-          create_panel(book)
+       
+        json.forEach((book , i) => {
+          if(i === 0) {
+            ps = book.id
+          } else {
+            create_panel(book)
+          }
         });
+        console.log(json)
       } catch (error) {
         console.log("error")
         console.error(error.message);
@@ -251,7 +258,7 @@
       formData.append('textData', input.value)
       formData.append('pdfFile', pdf_file);
       
-      fetch(`/${path_id}`, {
+      fetch(`/booklist/${path_id}`, {
         method: 'POST',
         body: formData,
       })
@@ -265,7 +272,7 @@
 
     function create_panel(book) {
       const a_tag = document.createElement("a")
-      a_tag.href = `http://localhost:3000/resource/${book.id}/${book.id}.pdf`
+      a_tag.href = `http://localhost:3000/resource/${ps}/${book.id}/${book.pdf}`
       a_tag.className = "a-tag"
 
       const box = document.createElement("div")
@@ -275,7 +282,7 @@
       img_box.className = "panel-img"
 
       const img = document.createElement("img")
-      img.src = `http://localhost:3000/resource/${book.id}/${book.img}`
+      img.src = `http://localhost:3000/resource/${ps}/${book.id}/${book.img}`
 
       img_box.appendChild(img)
 

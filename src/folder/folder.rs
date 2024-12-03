@@ -14,6 +14,7 @@ pub struct BookData {
     pub id: String,
     pub title: String,
     pub img: String,
+    pub pdf: String,
 }
 
 pub fn read_json_file<T>(file_path: &str) -> Result<Vec<T>, Box<dyn Error>> 

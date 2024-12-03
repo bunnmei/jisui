@@ -10,7 +10,7 @@ use tokio::{
 use axum::{
     extract::{DefaultBodyLimit, Multipart},
     response::{Html, IntoResponse},
-    routing::get, 
+    routing::{get, post}, 
     extract::Path as axumPath,
     Json, 
     Router
@@ -31,16 +31,13 @@ use pdf::pdf::get_amazon_img;
 
 #[tokio::main]
 async fn main() {
-    let serve_dir = ServeDir::new("all_pdfs");
+    let serve_dir = ServeDir::new("./PDFs");
 
     let app = Router::new()
         .route("/", get(root).post(reg_folder))
         .route("/folder_list", get(folder_list))
-
-        .route("/:id", get(displey).post(reg_pdf))
-        
-        // .route("/add", get(add_pdf).post(add_pdf_file))
-        // .route("/pdf_list", get(pdf_list))
+        .route("/booklist/:id", get(displey).post(reg_pdf))
+        .route("/pdf_list/:id", get(pdf_list))
         .nest_service("/resource", serve_dir)
         //uploadするファイルの大きさの上限を設定(1GiB)
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024));
@@ -49,6 +46,7 @@ async fn main() {
 }
 
 async fn root() -> impl IntoResponse {
+    println!("root--");
     let file_path = "static/index.html";
     // make_json();
     match fs::read_to_string(file_path) {
@@ -58,6 +56,7 @@ async fn root() -> impl IntoResponse {
 }
 
 async fn reg_folder(body: String) -> String {
+
     // ファイルに書き込むデータを作成
     let write_data = Folder {
             folder_name: body.to_string(),
@@ -147,7 +146,7 @@ async fn folder_list() -> Json<Vec<Folder>> {
 }
 
 async fn displey(axumPath(id): axumPath<String>) -> impl IntoResponse {
-    // println!("{}", id); urlのpath
+    println!("display - {}", id); //urlのpath
     let json = read_json_file::<Folder>("folder.json");
     let find_uuid = json_file_search_uuid(json, &id);
     let file_path = "static/list.html";
@@ -166,6 +165,7 @@ async fn displey(axumPath(id): axumPath<String>) -> impl IntoResponse {
 }
 
 async fn reg_pdf(axumPath(id): axumPath<String>, mut multipart: Multipart) -> String {
+    println!("reg_pdf - {}", id);
     let json = read_json_file::<Folder>("folder.json");
     let find_uuid = json_file_search_uuid(json, &id);
     let path = format!("./PDFs/{}", find_uuid.unwrap());
@@ -194,6 +194,7 @@ async fn reg_pdf(axumPath(id): axumPath<String>, mut multipart: Multipart) -> St
 
     let mut img_name_path = String::new();
     let mut pdf_title = String::new();
+    let mut pdf_file_name = String::new();
 
     while let Some(mut field) = multipart.next_field().await.unwrap() {
         if field.name() == Some("textData") {
@@ -207,7 +208,8 @@ async fn reg_pdf(axumPath(id): axumPath<String>, mut multipart: Multipart) -> St
         } else if field.name() == Some("pdfFile") {
             // PDFファイルを保存する処理
             let file_name = field.file_name().unwrap_or("temp.pdf");
-            println!("{}", file_name);
+            // println!("{}", file_name);
+            pdf_file_name = file_name.to_string();
             let mut file = File::create(&join.join(&file_name)).await.unwrap();
             let mut data = Vec::new(); // バイトデータを格納するベクトル
             while let Some(chunk) = field.chunk().await.unwrap() {
@@ -224,6 +226,7 @@ async fn reg_pdf(axumPath(id): axumPath<String>, mut multipart: Multipart) -> St
         id: new_uuid,
         img: img_name_path,
         title: pdf_title,
+        pdf: pdf_file_name
     };
     let json_data = serde_json::to_string_pretty(&mata_json).unwrap();
     let _ = json.write_all(json_data.as_bytes()).await.unwrap();
@@ -232,7 +235,62 @@ async fn reg_pdf(axumPath(id): axumPath<String>, mut multipart: Multipart) -> St
     "ok".to_string()
 }
 
+async fn pdf_list(axumPath(id): axumPath<String>) -> Json<Vec<BookData>> {
+    println!("pdf-list - {}", &id);
+    let mut book_list:Vec<BookData> = vec![];
 
+    let json = read_json_file::<Folder>("folder.json");
+    let find_uuid = json_file_search_uuid(json, &id).unwrap();
+    let find_path = format!("PDFs/{}", find_uuid);
+    let path = Path::new(&find_path);
+    let ent = fs::read_dir(path);
+    if let Err(e) = ent {
+        return Json(book_list);
+    }
+    
+    book_list.push(
+        BookData {
+            id:  find_uuid.clone(),
+            title : "".to_string(),
+            img: "".to_string(),
+            pdf: "".to_string()
+        }
+    );
+    ent.unwrap().for_each(|entry| {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            // ディレクトリかどうか確認
+            if path.is_dir() {
+                if let Some(dir_name) = path.file_name() {
+                    println!("{}", dir_name.to_string_lossy());
+
+                    let meta_file_path = path.join("meta.json");
+                    
+                    if meta_file_path.exists() {
+                        match std::fs::File::open(&meta_file_path) {
+                            Ok(mut file) => {
+                                let mut contents = String::new();
+                                if let Err(e) = file.read_to_string(&mut contents) {
+                                    eprintln!("Failed to read meta.json: {}", e);
+                                } else {
+                                    match serde_json::from_str::<BookData>(&contents) {
+                                        Ok(book_data) => {
+                                            println!("Parsed BookData: {:?}", book_data);
+                                            book_list.push(book_data);
+                                        }
+                                        Err(e) => eprintln!("Failed to parse meta.json: {}", e),
+                                    }
+                                }
+                            }
+                            Err(e) => eprintln!("Failed to open meta.json: {}", e),
+                        }
+                    }
+                }
+            }
+        }});
+
+    Json(book_list)
+}
 // #[derive(Serialize, Deserialize, Debug)]
 // struct BookData {
 //     id: String,
