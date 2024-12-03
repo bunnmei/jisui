@@ -9,6 +9,13 @@ pub struct Folder {
     pub list: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BookData {
+    pub id: String,
+    pub title: String,
+    pub img: String,
+}
+
 pub fn read_json_file<T>(file_path: &str) -> Result<Vec<T>, Box<dyn Error>> 
 where
     T: DeserializeOwned,
